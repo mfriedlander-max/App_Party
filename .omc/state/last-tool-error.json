@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd /Users/maxfriedlander/code/apps/App_Party && git log --oneline -3 2>&1\",\"description\":\"Check git history\"}",
+  "error": "Exit code 128\nfatal: not a git repository (or any of the parent directories): .git",
+  "timestamp": "2026-04-04T20:10:24.107Z",
+  "retry_count": 1
+}

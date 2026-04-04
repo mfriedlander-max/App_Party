@@ -1,0 +1,232 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Colors — reference theme CSS vars so Tailwind utilities respond to light/dark */
+  --color-base: var(--theme-base);
+  --color-surface: var(--theme-surface);
+  --color-surface-raised: var(--theme-surface-raised);
+  --color-surface-elevated: var(--theme-surface-elevated);
+  --color-border: var(--theme-border);
+  --color-border-subtle: var(--theme-border-subtle);
+
+  --color-text-primary: var(--theme-text-primary);
+  --color-text-secondary: var(--theme-text-secondary);
+  --color-text-muted: var(--theme-text-muted);
+
+  --color-accent: #FF2D55;
+  --color-accent-dim: rgba(255, 45, 85, 0.15);
+  --color-accent-glow: rgba(255, 45, 85, 0.4);
+
+  --color-glow: #00E5FF;
+  --color-glow-dim: rgba(0, 229, 255, 0.15);
+  --color-glow-border: rgba(0, 229, 255, 0.4);
+
+  --color-success: #30D158;
+  --color-warning: #FFD60A;
+  --color-error: #FF453A;
+  --color-info: #0A84FF;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1.125rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.375rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.75rem;
+  --font-size-4xl: 2rem;
+
+  /* Spacing */
+  --spacing-safe-top: env(safe-area-inset-top, 0px);
+  --spacing-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --spacing-safe-left: env(safe-area-inset-left, 0px);
+  --spacing-safe-right: env(safe-area-inset-right, 0px);
+  --spacing-tab-bar: 80px;
+  --spacing-top-bar: 64px;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-accent: 0 0 20px rgba(255, 45, 85, 0.3);
+  --shadow-glow: 0 0 20px rgba(0, 229, 255, 0.3);
+}
+
+/* ── Theme: Dark (default) ──────────────────────────────────────────────────── */
+:root,
+html.dark {
+  --theme-base: #0A0A0F;
+  --theme-surface: #0F0F16;
+  --theme-surface-raised: #13131A;
+  --theme-surface-elevated: #1A1A24;
+  --theme-border: #2A2A38;
+  --theme-border-subtle: #1E1E28;
+  --theme-text-primary: #F0F0F5;
+  --theme-text-secondary: #9090A0;
+  --theme-text-muted: #5A5A70;
+  --theme-topbar-bg: rgba(10, 10, 15, 0.85);
+  --theme-topbar-border: rgba(42, 42, 56, 0.8);
+  --theme-tabbar-bg: rgba(10, 10, 15, 0.85);
+  --theme-tabbar-border: rgba(42, 42, 56, 0.8);
+  --theme-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Theme: Light ───────────────────────────────────────────────────────────── */
+html.light {
+  --theme-base: #F5F5F7;
+  --theme-surface: #FFFFFF;
+  --theme-surface-raised: #F0F0F2;
+  --theme-surface-elevated: #E8E8EC;
+  --theme-border: #D1D1D6;
+  --theme-border-subtle: #E5E5EA;
+  --theme-text-primary: #1C1C1E;
+  --theme-text-secondary: #636366;
+  --theme-text-muted: #AEAEB2;
+  --theme-topbar-bg: rgba(245, 245, 247, 0.85);
+  --theme-topbar-border: rgba(209, 209, 214, 0.8);
+  --theme-tabbar-bg: rgba(245, 245, 247, 0.85);
+  --theme-tabbar-border: rgba(209, 209, 214, 0.8);
+  --theme-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* Base styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 18px;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background-color: var(--theme-base);
+  color: var(--theme-text-primary);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.5;
+  min-height: 100dvh;
+  overscroll-behavior: none;
+}
+
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Safe area custom properties */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --tab-bar-height: 80px;
+  --top-bar-height: 64px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Tap highlight */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid #FF2D55;
+  outline-offset: 2px;
+}
+
+/* iPhone frame for desktop viewing */
+.phone-frame-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100dvh;
+  background: #1a1a2e;
+  background-image: radial-gradient(ellipse at 50% 0%, rgba(255, 45, 85, 0.08) 0%, transparent 60%),
+                    radial-gradient(ellipse at 50% 100%, rgba(0, 229, 255, 0.06) 0%, transparent 60%);
+  padding: 20px;
+}
+
+.phone-frame {
+  position: relative;
+  width: 393px;
+  height: 852px;
+  border-radius: 50px;
+  border: 4px solid #3a3a4a;
+  box-shadow: 0 0 0 2px #1a1a2a,
+              0 20px 60px rgba(0, 0, 0, 0.5),
+              inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  background: var(--theme-base, #0A0A0F);
+  flex-shrink: 0;
+}
+
+.phone-notch {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 126px;
+  height: 34px;
+  background: #000;
+  border-radius: 0 0 20px 20px;
+  z-index: 9999;
+}
+
+.phone-notch::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  background: #1a1a2a;
+  border-radius: 50%;
+  box-shadow: inset 0 0 2px rgba(0, 229, 255, 0.3);
+}
+
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* On actual mobile devices, remove the frame and go full-screen */
+@media (max-width: 430px) {
+  .phone-frame-wrapper {
+    padding: 0;
+    background: none;
+    min-height: auto;
+  }
+
+  .phone-frame {
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .phone-notch {
+    display: none;
+  }
+}
