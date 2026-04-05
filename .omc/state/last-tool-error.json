@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /Users/maxfriedlander/code/apps/App_Party && vercel --yes --prod 2>&1\",\"timeout\":120000,\"description\":\"Deploy to Vercel production\"}",
-  "error": "Exit code 1\nVercel CLI 50.9.6\nLoading scopes…\nSearching for existing projects…\n> Auto-detected Project Settings for Vite\n\nError: Project names can be up to 100 characters long and must be lowercase. They can include letters, digits, and the following characters: '.', '_', '-'. However, they cannot contain the sequence '---'. (400)\nLearn More: https://vercel.com/docs/projects/overview#project-name",
-  "timestamp": "2026-04-05T00:13:36.040Z",
+  "tool_input_preview": "{\"command\":\"npm run test 2>&1\",\"timeout\":120000}",
+  "error": "Exit code 1\n\n> app-party@0.1.0 test\n> vitest run\n\n\n RUN  v3.2.4 /Users/maxfriedlander/code/Apps/App_Party\n\n(node:91497) Warning: `--localstorage-file` was provided without a valid path\n(Use `node --trace-warnings ...` to show where the warning was created)\n ✓ src/__tests__/lib/container-service.test.ts (22 tests) 6ms\n(node:91500) Warning: `--localstorage-file` was provided without a valid path\n(Use `node --trace-warnings ...` to show where the warning was created)\n(node:91502) Warning: `--locals...",
+  "timestamp": "2026-04-05T01:07:35.179Z",
   "retry_count": 1
 }

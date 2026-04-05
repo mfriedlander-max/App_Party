@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, X, Plus } from 'lucide-react';
+import { Camera, X, Plus, Barcode } from 'lucide-react';
 import { SheetModal } from '@/design-system/components/SheetModal';
 import { Button } from '@/design-system/components/Button';
 import { useDrinkStore } from '@/store/drink-store';
@@ -9,6 +9,7 @@ import { useHaptic } from '@/hooks/use-haptic';
 import { usePermissions } from '@/hooks/use-permissions';
 import { xpForDrink } from '@/utils/xp-calculator';
 import { scanDrink } from '@/lib/services/scan-service';
+import { enrichDrink } from '@/lib/services/drink-enrichment';
 import { logCorrection } from '@/lib/repositories/corrections-repository';
 import { logDrink } from '@/lib/repositories/drink-repository';
 import type { ScanResult } from '@/lib/services/scan-service';
@@ -28,7 +29,7 @@ const VESSEL_OPTIONS = [
   'champagne flute',
 ] as const;
 
-type ScanState = 'idle' | 'scanning' | 'identified' | 'error';
+type ScanState = 'idle' | 'barcode' | 'scanning' | 'identified' | 'error';
 
 interface EditableFields {
   drinkType: string;
@@ -46,6 +47,8 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [editable, setEditable] = useState<EditableFields | null>(null);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addDrink = useDrinkStore((s) => s.addDrink);
@@ -188,13 +191,54 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
     setScanState('idle');
     setScanResult(null);
     setEditable(null);
+    setBarcodeInput('');
   }, [onClose]);
 
   const handleReset = useCallback(() => {
     setScanState('idle');
     setScanResult(null);
     setEditable(null);
+    setBarcodeInput('');
   }, []);
+
+  const handleBarcodeSubmit = useCallback(async () => {
+    const code = barcodeInput.trim();
+    if (!code) return;
+    setBarcodeLoading(true);
+    try {
+      const enriched = await enrichDrink({ barcode: code });
+      if (enriched) {
+        const result: ScanResult = {
+          drinkType: enriched.name,
+          brand: enriched.brand,
+          vesselType: 'can',
+          fillLevel: 1.0,
+          abv: enriched.abv,
+          volumeMl: enriched.standard_volume_ml,
+          standardDrinks: enriched.standard_drinks,
+          confidence: 0.90,
+          isMock: false,
+          catalogId: enriched.id,
+          enrichmentSource: enriched.source ?? 'openfoodfacts',
+        };
+        setScanResult(result);
+        setEditable({
+          drinkType: result.drinkType,
+          abv: parseFloat((result.abv * 100).toFixed(1)),
+          vesselType: result.vesselType,
+          fillLevel: Math.round(result.fillLevel * 100),
+        });
+        setScanState('identified');
+        haptic.light();
+      } else {
+        addToast({ message: 'Barcode not found. Try scanning the drink image instead.', variant: 'error' });
+      }
+    } catch {
+      addToast({ message: 'Barcode lookup failed. Please try again.', variant: 'error' });
+    } finally {
+      setBarcodeLoading(false);
+    }
+  }, [barcodeInput, haptic, addToast]);
 
   const updateEditable = useCallback(<K extends keyof EditableFields>(
     field: K,
@@ -234,6 +278,47 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
               <Button variant="primary" size="large" fullWidth onClick={handleScan}>
                 <Camera size={20} className="mr-2" />
                 Scan Drink
+              </Button>
+              <Button variant="ghost" size="default" fullWidth onClick={() => setScanState('barcode')}>
+                <Barcode size={18} className="mr-2" />
+                Enter Barcode
+              </Button>
+            </motion.div>
+          )}
+
+          {scanState === 'barcode' && (
+            <motion.div
+              key="barcode"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-6 w-full"
+            >
+              <div className="w-full aspect-square max-w-[280px] bg-surface rounded-2xl border-2 border-dashed border-border flex items-center justify-center">
+                <Barcode size={64} className="text-text-secondary" />
+              </div>
+              <p className="text-text-secondary text-base text-center">
+                Enter the barcode number from the packaging
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="e.g. 018200007315"
+                value={barcodeInput}
+                onChange={(e) => setBarcodeInput(e.target.value)}
+                className="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-text-primary text-base focus:outline-none focus:border-glow text-center tracking-widest"
+              />
+              <Button
+                variant="primary"
+                size="large"
+                fullWidth
+                onClick={handleBarcodeSubmit}
+                disabled={!barcodeInput.trim() || barcodeLoading}
+              >
+                {barcodeLoading ? 'Looking up…' : 'Look Up Drink'}
+              </Button>
+              <Button variant="ghost" size="default" fullWidth onClick={handleReset}>
+                Cancel
               </Button>
             </motion.div>
           )}

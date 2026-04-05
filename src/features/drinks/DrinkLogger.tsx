@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Search } from 'lucide-react';
 import { SheetModal } from '@/design-system/components/SheetModal';
 import { Button } from '@/design-system/components/Button';
 import { useDrinkStore } from '@/store/drink-store';
@@ -9,7 +10,7 @@ import { xpForDrink } from '@/utils/xp-calculator';
 import { PhotoRecognition } from './PhotoRecognition';
 import type { DrinkCatalogItem } from '@/types';
 
-type Category = 'beer' | 'cocktail' | 'shot' | 'wine';
+type Category = 'beer' | 'cocktail' | 'shot' | 'wine' | 'spirit' | 'other';
 type Step = 'category' | 'drinks' | 'confirm';
 
 interface CategoryConfig {
@@ -19,10 +20,12 @@ interface CategoryConfig {
 }
 
 const CATEGORIES: CategoryConfig[] = [
-  { id: 'beer', label: 'Beer', emoji: '🍺' },
+  { id: 'beer',     label: 'Beer',     emoji: '🍺' },
   { id: 'cocktail', label: 'Cocktail', emoji: '🍸' },
-  { id: 'shot', label: 'Shot', emoji: '🥃' },
-  { id: 'wine', label: 'Wine', emoji: '🍷' },
+  { id: 'shot',     label: 'Shot',     emoji: '🥃' },
+  { id: 'wine',     label: 'Wine',     emoji: '🍷' },
+  { id: 'spirit',   label: 'Spirit',   emoji: '🥃' },
+  { id: 'other',    label: 'Other',    emoji: '🥤' },
 ];
 
 const slideVariants: import('framer-motion').Variants = {
@@ -36,10 +39,22 @@ interface DrinkLoggerProps {
   readonly onClose: () => void;
 }
 
+/** Sort branded drinks first, then alphabetically within each group */
+function sortDrinks(drinks: DrinkCatalogItem[]): DrinkCatalogItem[] {
+  return [...drinks].sort((a, b) => {
+    const aBranded = Boolean((a as DrinkCatalogItem & { brand?: string }).brand);
+    const bBranded = Boolean((b as DrinkCatalogItem & { brand?: string }).brand);
+    if (aBranded && !bBranded) return -1;
+    if (!aBranded && bBranded) return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
   const [step, setStep] = useState<Step>('category');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedDrink, setSelectedDrink] = useState<DrinkCatalogItem | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
 
   const catalog = useDrinkStore((s) => s.catalog);
@@ -51,17 +66,18 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
 
   const handleClose = () => {
     onClose();
-    // Reset after modal animates out
     setTimeout(() => {
       setStep('category');
       setSelectedCategory(null);
       setSelectedDrink(null);
+      setSearchQuery('');
     }, 300);
   };
 
   const handleSelectCategory = (cat: Category) => {
     haptic.light();
     setSelectedCategory(cat);
+    setSearchQuery('');
     setStep('drinks');
   };
 
@@ -89,6 +105,7 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
     } else if (step === 'drinks') {
       setStep('category');
       setSelectedCategory(null);
+      setSearchQuery('');
     }
   };
 
@@ -99,24 +116,43 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
 
   const handleScanClose = () => {
     setScanOpen(false);
-    // If a drink was logged via scan, close the DrinkLogger too
     handleClose();
   };
 
-  const drinksInCategory = selectedCategory
-    ? catalog.filter((d) => d.category === selectedCategory)
-    : [];
+  // Filter and sort drinks for the selected category
+  const drinksInCategory = useMemo(() => {
+    if (!selectedCategory) return [];
+    const filtered = catalog.filter((d) => d.category === selectedCategory);
+    const q = searchQuery.trim().toLowerCase();
+    const searched = q
+      ? filtered.filter(
+          (d) =>
+            d.name.toLowerCase().includes(q) ||
+            ((d as DrinkCatalogItem & { brand?: string }).brand ?? '').toLowerCase().includes(q),
+        )
+      : filtered;
+    return sortDrinks(searched);
+  }, [catalog, selectedCategory, searchQuery]);
+
+  // Group drinks: branded first, then generics
+  const brandedDrinks = useMemo(
+    () => drinksInCategory.filter((d) => Boolean((d as DrinkCatalogItem & { brand?: string }).brand)),
+    [drinksInCategory],
+  );
+  const genericDrinks = useMemo(
+    () => drinksInCategory.filter((d) => !Boolean((d as DrinkCatalogItem & { brand?: string }).brand)),
+    [drinksInCategory],
+  );
 
   const stepTitle =
     step === 'category' ? 'What are you drinking?' :
-    step === 'drinks' ? `Choose a ${selectedCategory}` :
+    step === 'drinks' ? `Choose a ${selectedCategory ?? 'drink'}` :
     'Confirm Drink';
 
   return (
     <>
       <SheetModal isOpen={isOpen} onClose={handleClose} title={stepTitle}>
         <div className="pb-6">
-          {/* Back button (steps 2 and 3) */}
           {step !== 'category' && (
             <button
               onClick={handleBack}
@@ -137,7 +173,6 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
                 exit="exit"
                 className="flex flex-col gap-4"
               >
-                {/* Scan option */}
                 <button
                   onClick={handleOpenScan}
                   className="flex items-center justify-center gap-3 bg-surface-elevated border border-glow/40 rounded-xl min-h-[56px] px-4 cursor-pointer hover:bg-surface-raised active:bg-surface transition-colors text-glow font-semibold text-base"
@@ -148,7 +183,6 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
 
                 <p className="text-text-secondary text-xs text-center">— or pick a category —</p>
 
-                {/* Category grid */}
                 <div className="grid grid-cols-2 gap-3">
                   {CATEGORIES.map((cat) => (
                     <button
@@ -158,13 +192,16 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
                     >
                       <span className="text-4xl leading-none">{cat.emoji}</span>
                       <span className="text-text-primary text-lg font-semibold">{cat.label}</span>
+                      <span className="text-text-secondary text-xs">
+                        {catalog.filter((d) => d.category === cat.id).length} drinks
+                      </span>
                     </button>
                   ))}
                 </div>
               </motion.div>
             )}
 
-            {/* Step 2 — drink list */}
+            {/* Step 2 — drink list with search */}
             {step === 'drinks' && (
               <motion.div
                 key="drinks"
@@ -172,23 +209,61 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
                 initial="enter"
                 animate="center"
                 exit="exit"
-                className="grid grid-cols-2 gap-3"
+                className="flex flex-col gap-4"
               >
-                {drinksInCategory.map((drink) => (
-                  <button
-                    key={drink.id}
-                    onClick={() => handleSelectDrink(drink)}
-                    className="flex flex-col items-center justify-center gap-2 bg-surface-elevated border border-border rounded-xl min-h-[88px] px-3 cursor-pointer hover:bg-surface-raised active:bg-surface transition-colors"
-                  >
-                    <span className="text-3xl leading-none">{drink.emoji}</span>
-                    <span className="text-text-primary text-base font-semibold text-center leading-tight">
-                      {drink.name}
-                    </span>
-                    <span className="text-text-secondary text-xs">
-                      {drink.standardDrinks.toFixed(1)} std
-                    </span>
-                  </button>
-                ))}
+                {/* Search bar */}
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+                  <input
+                    type="text"
+                    placeholder="Search drinks..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-surface-elevated border border-border rounded-xl pl-9 pr-4 py-3 text-text-primary text-sm focus:outline-none focus:border-glow"
+                  />
+                </div>
+
+                {/* Branded drinks section */}
+                {brandedDrinks.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-text-secondary text-xs font-semibold uppercase tracking-wide px-1">
+                      Branded
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {brandedDrinks.map((drink) => (
+                        <DrinkCard
+                          key={drink.id}
+                          drink={drink}
+                          onSelect={handleSelectDrink}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Generic / classic section */}
+                {genericDrinks.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-text-secondary text-xs font-semibold uppercase tracking-wide px-1">
+                      Classic
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {genericDrinks.map((drink) => (
+                        <DrinkCard
+                          key={drink.id}
+                          drink={drink}
+                          onSelect={handleSelectDrink}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {drinksInCategory.length === 0 && (
+                  <p className="text-text-secondary text-sm text-center py-8">
+                    No drinks found{searchQuery ? ` for "${searchQuery}"` : ''}.
+                  </p>
+                )}
               </motion.div>
             )}
 
@@ -206,8 +281,10 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
                 <div className="text-center">
                   <p className="text-text-primary text-2xl font-bold">{selectedDrink.name}</p>
                   <p className="text-text-secondary text-base mt-1">
-                    {selectedDrink.standardDrinks.toFixed(1)} standard drinks ·{' '}
-                    {selectedDrink.abv}% ABV
+                    {(selectedDrink.abv * 100).toFixed(1)}% ABV · {selectedDrink.volumeMl} mL
+                  </p>
+                  <p className="text-text-secondary text-sm mt-0.5">
+                    {selectedDrink.standardDrinks.toFixed(1)} standard drinks
                   </p>
                 </div>
 
@@ -218,12 +295,7 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
                   </p>
                 </div>
 
-                <Button
-                  variant="primary"
-                  size="large"
-                  fullWidth
-                  onClick={handleConfirm}
-                >
+                <Button variant="primary" size="large" fullWidth onClick={handleConfirm}>
                   Add Drink
                 </Button>
               </motion.div>
@@ -234,5 +306,33 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
 
       <PhotoRecognition isOpen={scanOpen} onClose={handleScanClose} />
     </>
+  );
+}
+
+// ── Sub-component ─────────────────────────────────────────────────────────────
+
+interface DrinkCardProps {
+  readonly drink: DrinkCatalogItem;
+  readonly onSelect: (drink: DrinkCatalogItem) => void;
+}
+
+function DrinkCard({ drink, onSelect }: DrinkCardProps) {
+  const brand = (drink as DrinkCatalogItem & { brand?: string }).brand;
+  return (
+    <button
+      onClick={() => onSelect(drink)}
+      className="flex flex-col items-center justify-center gap-1 bg-surface-elevated border border-border rounded-xl min-h-[96px] px-3 py-3 cursor-pointer hover:bg-surface-raised active:bg-surface transition-colors"
+    >
+      <span className="text-3xl leading-none">{drink.emoji}</span>
+      <span className="text-text-primary text-sm font-semibold text-center leading-tight line-clamp-2">
+        {drink.name}
+      </span>
+      {brand && (
+        <span className="text-text-secondary text-xs text-center leading-tight">{brand}</span>
+      )}
+      <span className="text-text-secondary text-xs">
+        {(drink.abv * 100).toFixed(1)}% · {drink.standardDrinks.toFixed(1)} std
+      </span>
+    </button>
   );
 }

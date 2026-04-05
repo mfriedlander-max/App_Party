@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '@/lib/supabase'
+import { enrichDrink } from '@/lib/services/drink-enrichment'
 
 export interface ScanResult {
   drinkType: string
@@ -10,6 +11,8 @@ export interface ScanResult {
   standardDrinks: number
   confidence: number
   isMock: boolean
+  catalogId?: string | null
+  enrichmentSource?: string
 }
 
 interface RawScanResponse {
@@ -21,6 +24,8 @@ interface RawScanResponse {
   volume_ml: number
   standard_drinks: number
   confidence: number
+  catalog_id?: string | null
+  enrichment_source?: string
 }
 
 const MOCK_DRINKS: ScanResult[] = [
@@ -81,6 +86,8 @@ function rawToScanResult(raw: RawScanResponse): ScanResult {
     standardDrinks: raw.standard_drinks,
     confidence: raw.confidence,
     isMock: false,
+    catalogId: raw.catalog_id ?? null,
+    enrichmentSource: raw.enrichment_source ?? 'edge_function',
   }
 }
 
@@ -209,6 +216,8 @@ export function scanDrinkMock(): ScanResult {
 
 /**
  * Main entry point. Tries Edge Function → local OpenAI → mock fallback.
+ * After identifying the drink, runs the enrichment pipeline to fill in
+ * accurate ABV and catalog data if not already enriched.
  */
 export async function scanDrink(imageBase64: string): Promise<ScanResult> {
   const hasOpenAiKey = Boolean(import.meta.env.VITE_OPENAI_API_KEY)
@@ -216,8 +225,11 @@ export async function scanDrink(imageBase64: string): Promise<ScanResult> {
     import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY,
   )
 
+  let result: ScanResult
+
   if (hasSupabase) {
     try {
+      // Edge function already runs full enrichment pipeline
       return await scanDrinkViaEdgeFunction(imageBase64)
     } catch {
       // Fall through to local or mock
@@ -226,13 +238,38 @@ export async function scanDrink(imageBase64: string): Promise<ScanResult> {
 
   if (hasOpenAiKey) {
     try {
-      return await scanDrinkLocally(imageBase64)
+      result = await scanDrinkLocally(imageBase64)
     } catch {
-      // Fall through to mock
+      result = scanDrinkMock()
+    }
+  } else {
+    result = scanDrinkMock()
+  }
+
+  // Run client-side enrichment to fill in catalog data when Edge Function unavailable
+  if (!result.isMock && !result.catalogId) {
+    try {
+      const enriched = await enrichDrink({
+        name: result.drinkType,
+        brand: result.brand ?? undefined,
+        category: undefined,
+      })
+      if (enriched) {
+        return {
+          ...result,
+          abv: enriched.abv,
+          volumeMl: enriched.standard_volume_ml,
+          standardDrinks: enriched.standard_drinks,
+          catalogId: enriched.id,
+          enrichmentSource: enriched.source ?? 'local_catalog',
+        }
+      }
+    } catch {
+      // Enrichment is best-effort — return original result
     }
   }
 
-  return scanDrinkMock()
+  return result
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────

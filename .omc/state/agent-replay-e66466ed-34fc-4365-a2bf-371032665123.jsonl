@@ -63,3 +63,10 @@
 {"t":0,"agent":"a92223e","agent_type":"build-error-resolver","event":"agent_stop","success":true,"duration_ms":39351}
 {"t":0,"agent":"aad2d11","agent_type":"executor","event":"agent_start","parent_mode":"none"}
 {"t":0,"agent":"aad2d11","agent_type":"executor","event":"agent_stop","success":true,"duration_ms":187423}
+{"t":0,"agent":"system","event":"keyword_detected","keyword":"autopilot"}
+{"t":0,"agent":"system","event":"mode_change","mode_from":"none","mode_to":"autopilot"}
+{"t":0,"agent":"system","event":"skill_invoked","skill_name":"oh-my-claudecode:autopilot"}
+{"t":0,"agent":"ac90ed1","agent_type":"general-purpose","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"ac90ed1","agent_type":"general-purpose","event":"agent_stop","success":true,"duration_ms":190310}
+{"t":0,"agent":"aaf8fe7","agent_type":"executor","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"aaf8fe7","agent_type":"executor","event":"agent_stop","success":true,"duration_ms":565826}
