@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, X, Plus, Barcode } from 'lucide-react';
 import { SheetModal } from '@/design-system/components/SheetModal';
 import { Button } from '@/design-system/components/Button';
+import { BarcodeScanner } from '@/features/drinks/BarcodeScanner';
 import { useDrinkStore } from '@/store/drink-store';
 import { useAppStore } from '@/store/app-store';
 import { useHaptic } from '@/hooks/use-haptic';
@@ -29,7 +30,7 @@ const VESSEL_OPTIONS = [
   'champagne flute',
 ] as const;
 
-type ScanState = 'idle' | 'barcode' | 'scanning' | 'identified' | 'error';
+type ScanState = 'idle' | 'barcode' | 'camera-scan' | 'scanning' | 'identified' | 'error';
 
 interface EditableFields {
   drinkType: string;
@@ -201,9 +202,7 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
     setBarcodeInput('');
   }, []);
 
-  const handleBarcodeSubmit = useCallback(async () => {
-    const code = barcodeInput.trim();
-    if (!code) return;
+  const applyBarcodeEnrichment = useCallback(async (code: string) => {
     setBarcodeLoading(true);
     try {
       const enriched = await enrichDrink({ barcode: code });
@@ -232,13 +231,31 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
         haptic.light();
       } else {
         addToast({ message: 'Barcode not found. Try scanning the drink image instead.', variant: 'error' });
+        setScanState('idle');
       }
     } catch {
       addToast({ message: 'Barcode lookup failed. Please try again.', variant: 'error' });
+      setScanState('idle');
     } finally {
       setBarcodeLoading(false);
     }
-  }, [barcodeInput, haptic, addToast]);
+  }, [haptic, addToast]);
+
+  const handleBarcodeDetected = useCallback((barcode: string) => {
+    setScanState('scanning');
+    applyBarcodeEnrichment(barcode);
+  }, [applyBarcodeEnrichment]);
+
+  const handleCameraUnavailable = useCallback(() => {
+    setScanState('barcode');
+    addToast({ message: 'Camera unavailable. Enter barcode manually.', variant: 'error' });
+  }, [addToast]);
+
+  const handleBarcodeSubmit = useCallback(async () => {
+    const code = barcodeInput.trim();
+    if (!code) return;
+    await applyBarcodeEnrichment(code);
+  }, [barcodeInput, applyBarcodeEnrichment]);
 
   const updateEditable = useCallback(<K extends keyof EditableFields>(
     field: K,
@@ -248,7 +265,17 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
   }, []);
 
   return (
-    <SheetModal isOpen={isOpen} onClose={onClose} title="Scan Your Drink">
+    <>
+      {/* Camera barcode scanner — rendered outside SheetModal to fill screen */}
+      {scanState === 'camera-scan' && (
+        <BarcodeScanner
+          onBarcodeDetected={handleBarcodeDetected}
+          onClose={handleReset}
+          onCameraUnavailable={handleCameraUnavailable}
+        />
+      )}
+
+      <SheetModal isOpen={isOpen} onClose={onClose} title="Scan Your Drink">
       {/* Hidden file input for camera/gallery capture */}
       <input
         ref={fileInputRef}
@@ -279,9 +306,9 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
                 <Camera size={20} className="mr-2" />
                 Scan Drink
               </Button>
-              <Button variant="ghost" size="default" fullWidth onClick={() => setScanState('barcode')}>
+              <Button variant="ghost" size="default" fullWidth onClick={() => setScanState('camera-scan')}>
                 <Barcode size={18} className="mr-2" />
-                Enter Barcode
+                Scan Barcode
               </Button>
             </motion.div>
           )}
@@ -316,6 +343,10 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
                 disabled={!barcodeInput.trim() || barcodeLoading}
               >
                 {barcodeLoading ? 'Looking up…' : 'Look Up Drink'}
+              </Button>
+              <Button variant="ghost" size="default" fullWidth onClick={() => setScanState('camera-scan')}>
+                <Barcode size={16} className="mr-2" />
+                Use Camera Instead
               </Button>
               <Button variant="ghost" size="default" fullWidth onClick={handleReset}>
                 Cancel
@@ -433,7 +464,7 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
 
               <Button variant="primary" size="large" fullWidth onClick={handleAdd}>
                 <Plus size={20} className="mr-2" />
-                Confirm Drink
+                Add Drink
               </Button>
               <Button variant="ghost" size="default" fullWidth onClick={handleReset}>
                 Try Again
@@ -467,6 +498,7 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
         </AnimatePresence>
       </div>
     </SheetModal>
+    </>
   );
 }
 

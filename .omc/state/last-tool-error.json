@@ -1,7 +1,7 @@
 {
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"npm run test 2>&1\",\"timeout\":120000}",
-  "error": "Exit code 1\n\n> app-party@0.1.0 test\n> vitest run\n\n\n RUN  v3.2.4 /Users/maxfriedlander/code/Apps/App_Party\n\n(node:91497) Warning: `--localstorage-file` was provided without a valid path\n(Use `node --trace-warnings ...` to show where the warning was created)\n ✓ src/__tests__/lib/container-service.test.ts (22 tests) 6ms\n(node:91500) Warning: `--localstorage-file` was provided without a valid path\n(Use `node --trace-warnings ...` to show where the warning was created)\n(node:91502) Warning: `--locals...",
-  "timestamp": "2026-04-05T01:07:35.179Z",
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"/Users/maxfriedlander/code/Apps/App_Party/src/__tests__/features/drinks\"}",
+  "error": "EISDIR: illegal operation on a directory, read '/Users/maxfriedlander/code/Apps/App_Party/src/__tests__/features/drinks'",
+  "timestamp": "2026-04-05T15:33:10.402Z",
   "retry_count": 1
 }

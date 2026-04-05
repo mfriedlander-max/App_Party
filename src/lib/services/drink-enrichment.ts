@@ -129,6 +129,17 @@ async function searchLocalCatalog(query: EnrichmentQuery): Promise<DrinkCatalogR
   return data as DrinkCatalogRow
 }
 
+// ─── Default ABV by category ─────────────────────────────────────────────────
+
+const CATEGORY_DEFAULT_ABV: Record<DrinkCatalogRow['category'], number> = {
+  beer: 0.05,
+  wine: 0.13,
+  spirit: 0.40,
+  cocktail: 0.12,
+  shot: 0.40,
+  other: 0.05,
+}
+
 // ─── Step 2: OpenFoodFacts barcode lookup ─────────────────────────────────────
 
 async function lookupByBarcode(barcode: string): Promise<DrinkCatalogRow | null> {
@@ -144,10 +155,14 @@ async function lookupByBarcode(barcode: string): Promise<DrinkCatalogRow | null>
   }
 
   if (response.status !== 1 || !response.product) return null
-  const abv = parseAbvFromOFF(response.product)
-  if (!abv) return null
 
-  const insert = offProductToCatalogInsert(response.product, abv)
+  const product = response.product
+  const abv = parseAbvFromOFF(product) ?? (() => {
+    const category = inferCategoryFromOFF(product)
+    return CATEGORY_DEFAULT_ABV[category]
+  })()
+
+  const insert = offProductToCatalogInsert(product, abv)
   return cacheToLocalCatalog(insert)
 }
 
