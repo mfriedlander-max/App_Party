@@ -6,6 +6,7 @@ import { useDrinkStore } from '@/store/drink-store';
 import { useAppStore } from '@/store/app-store';
 import { useHaptic } from '@/hooks/use-haptic';
 import { xpForDrink } from '@/utils/xp-calculator';
+import { PhotoRecognition } from './PhotoRecognition';
 import type { DrinkCatalogItem } from '@/types';
 
 type Category = 'beer' | 'cocktail' | 'shot' | 'wine';
@@ -39,6 +40,7 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
   const [step, setStep] = useState<Step>('category');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedDrink, setSelectedDrink] = useState<DrinkCatalogItem | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
 
   const catalog = useDrinkStore((s) => s.catalog);
   const addDrink = useDrinkStore((s) => s.addDrink);
@@ -90,6 +92,17 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
     }
   };
 
+  const handleOpenScan = () => {
+    haptic.light();
+    setScanOpen(true);
+  };
+
+  const handleScanClose = () => {
+    setScanOpen(false);
+    // If a drink was logged via scan, close the DrinkLogger too
+    handleClose();
+  };
+
   const drinksInCategory = selectedCategory
     ? catalog.filter((d) => d.category === selectedCategory)
     : [];
@@ -100,108 +113,126 @@ export function DrinkLogger({ isOpen, onClose }: DrinkLoggerProps) {
     'Confirm Drink';
 
   return (
-    <SheetModal isOpen={isOpen} onClose={handleClose} title={stepTitle}>
-      <div className="pb-6">
-        {/* Back button (steps 2 and 3) */}
-        {step !== 'category' && (
-          <button
-            onClick={handleBack}
-            className="mb-4 text-glow text-base font-semibold cursor-pointer"
-          >
-            ← Back
-          </button>
-        )}
-
-        <AnimatePresence>
-          {/* Step 1 — category grid */}
-          {step === 'category' && (
-            <motion.div
-              key="category"
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              className="grid grid-cols-2 gap-3"
+    <>
+      <SheetModal isOpen={isOpen} onClose={handleClose} title={stepTitle}>
+        <div className="pb-6">
+          {/* Back button (steps 2 and 3) */}
+          {step !== 'category' && (
+            <button
+              onClick={handleBack}
+              className="mb-4 text-glow text-base font-semibold cursor-pointer"
             >
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => handleSelectCategory(cat.id)}
-                  className="flex flex-col items-center justify-center gap-2 bg-surface-elevated border border-border rounded-xl min-h-[88px] cursor-pointer hover:bg-surface-raised active:bg-surface transition-colors"
-                >
-                  <span className="text-4xl leading-none">{cat.emoji}</span>
-                  <span className="text-text-primary text-lg font-semibold">{cat.label}</span>
-                </button>
-              ))}
-            </motion.div>
+              ← Back
+            </button>
           )}
 
-          {/* Step 2 — drink list */}
-          {step === 'drinks' && (
-            <motion.div
-              key="drinks"
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              className="grid grid-cols-2 gap-3"
-            >
-              {drinksInCategory.map((drink) => (
-                <button
-                  key={drink.id}
-                  onClick={() => handleSelectDrink(drink)}
-                  className="flex flex-col items-center justify-center gap-2 bg-surface-elevated border border-border rounded-xl min-h-[88px] px-3 cursor-pointer hover:bg-surface-raised active:bg-surface transition-colors"
-                >
-                  <span className="text-3xl leading-none">{drink.emoji}</span>
-                  <span className="text-text-primary text-base font-semibold text-center leading-tight">
-                    {drink.name}
-                  </span>
-                  <span className="text-text-secondary text-xs">
-                    {drink.standardDrinks.toFixed(1)} std
-                  </span>
-                </button>
-              ))}
-            </motion.div>
-          )}
-
-          {/* Step 3 — confirm */}
-          {step === 'confirm' && selectedDrink && (
-            <motion.div
-              key="confirm"
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              className="flex flex-col items-center gap-6 py-4"
-            >
-              <span className="text-7xl leading-none">{selectedDrink.emoji}</span>
-              <div className="text-center">
-                <p className="text-text-primary text-2xl font-bold">{selectedDrink.name}</p>
-                <p className="text-text-secondary text-base mt-1">
-                  {selectedDrink.standardDrinks.toFixed(1)} standard drinks ·{' '}
-                  {selectedDrink.abv}% ABV
-                </p>
-              </div>
-
-              <div className="w-full bg-surface-elevated rounded-xl border border-border p-4 text-center">
-                <p className="text-text-secondary text-sm">Est. BAC impact</p>
-                <p className="text-glow text-lg font-bold mt-1">
-                  +{(selectedDrink.standardDrinks * 0.02).toFixed(3)}
-                </p>
-              </div>
-
-              <Button
-                variant="primary"
-                size="large"
-                fullWidth
-                onClick={handleConfirm}
+          <AnimatePresence>
+            {/* Step 1 — category grid */}
+            {step === 'category' && (
+              <motion.div
+                key="category"
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                className="flex flex-col gap-4"
               >
-                Add Drink
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </SheetModal>
+                {/* Scan option */}
+                <button
+                  onClick={handleOpenScan}
+                  className="flex items-center justify-center gap-3 bg-surface-elevated border border-glow/40 rounded-xl min-h-[56px] px-4 cursor-pointer hover:bg-surface-raised active:bg-surface transition-colors text-glow font-semibold text-base"
+                >
+                  <span className="text-2xl leading-none">📷</span>
+                  Scan with AI
+                </button>
+
+                <p className="text-text-secondary text-xs text-center">— or pick a category —</p>
+
+                {/* Category grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => handleSelectCategory(cat.id)}
+                      className="flex flex-col items-center justify-center gap-2 bg-surface-elevated border border-border rounded-xl min-h-[88px] cursor-pointer hover:bg-surface-raised active:bg-surface transition-colors"
+                    >
+                      <span className="text-4xl leading-none">{cat.emoji}</span>
+                      <span className="text-text-primary text-lg font-semibold">{cat.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 2 — drink list */}
+            {step === 'drinks' && (
+              <motion.div
+                key="drinks"
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                className="grid grid-cols-2 gap-3"
+              >
+                {drinksInCategory.map((drink) => (
+                  <button
+                    key={drink.id}
+                    onClick={() => handleSelectDrink(drink)}
+                    className="flex flex-col items-center justify-center gap-2 bg-surface-elevated border border-border rounded-xl min-h-[88px] px-3 cursor-pointer hover:bg-surface-raised active:bg-surface transition-colors"
+                  >
+                    <span className="text-3xl leading-none">{drink.emoji}</span>
+                    <span className="text-text-primary text-base font-semibold text-center leading-tight">
+                      {drink.name}
+                    </span>
+                    <span className="text-text-secondary text-xs">
+                      {drink.standardDrinks.toFixed(1)} std
+                    </span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+
+            {/* Step 3 — confirm */}
+            {step === 'confirm' && selectedDrink && (
+              <motion.div
+                key="confirm"
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                className="flex flex-col items-center gap-6 py-4"
+              >
+                <span className="text-7xl leading-none">{selectedDrink.emoji}</span>
+                <div className="text-center">
+                  <p className="text-text-primary text-2xl font-bold">{selectedDrink.name}</p>
+                  <p className="text-text-secondary text-base mt-1">
+                    {selectedDrink.standardDrinks.toFixed(1)} standard drinks ·{' '}
+                    {selectedDrink.abv}% ABV
+                  </p>
+                </div>
+
+                <div className="w-full bg-surface-elevated rounded-xl border border-border p-4 text-center">
+                  <p className="text-text-secondary text-sm">Est. BAC impact</p>
+                  <p className="text-glow text-lg font-bold mt-1">
+                    +{(selectedDrink.standardDrinks * 0.02).toFixed(3)}
+                  </p>
+                </div>
+
+                <Button
+                  variant="primary"
+                  size="large"
+                  fullWidth
+                  onClick={handleConfirm}
+                >
+                  Add Drink
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </SheetModal>
+
+      <PhotoRecognition isOpen={scanOpen} onClose={handleScanClose} />
+    </>
   );
 }

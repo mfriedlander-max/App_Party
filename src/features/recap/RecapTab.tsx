@@ -1,14 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Film, Calendar, Image } from 'lucide-react';
+import { Film, Calendar, Image, RefreshCw } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { Card } from '@/design-system/components/Card';
 import { EmptyState } from '@/design-system/components/EmptyState';
+import { Button } from '@/design-system/components/Button';
 import { RecapStory } from './RecapStory';
 import { CameraRollSync } from '@/features/settings/CameraRollSync';
 import { usePartyStore } from '@/store/party-store';
+import { useAppStore } from '@/store/app-store';
 import { usePermissions } from '@/hooks/use-permissions';
 import { staggerContainer, staggerItem } from '@/design-system/animations';
+import { MOCK_RECAPS } from '@/data/mock-recaps';
+import { CURRENT_USER } from '@/data/mock-users';
+import * as recapRepo from '@/lib/repositories/recap-repository';
 import type { Recap } from '@/types';
 
 function formatRecapDate(isoDate: string): string {
@@ -63,16 +68,54 @@ function RecapCard({ recap, onOpen }: RecapCardProps) {
 }
 
 export function RecapTab() {
-  const recaps = usePartyStore((s) => s.recaps);
+  const storeRecaps = usePartyStore((s) => s.recaps);
+  const pastParties = usePartyStore((s) => s.pastParties);
+  const addToast = useAppStore((s) => s.addToast);
+
+  const [recaps, setRecaps] = useState<Recap[]>(storeRecaps);
   const [activeRecap, setActiveRecap] = useState<Recap | null>(null);
   const [showCameraRollSync, setShowCameraRollSync] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const photosPermission = usePermissions((s) => s.photos);
   const requestPhotos = usePermissions((s) => s.requestPhotos);
 
+  const loadRecaps = useCallback(async () => {
+    try {
+      const fetched = await recapRepo.fetchRecapsForUser(CURRENT_USER.id);
+      setRecaps(fetched.length > 0 ? fetched : MOCK_RECAPS);
+    } catch {
+      // Supabase unavailable — fall back to mock recaps
+      setRecaps(MOCK_RECAPS);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecaps().catch(() => {});
+  }, [loadRecaps]);
+
   async function handleEnablePhotos() {
     await requestPhotos();
     setShowCameraRollSync(true);
+  }
+
+  async function handleGenerateRecap() {
+    const mostRecentEnded = pastParties[0];
+    if (!mostRecentEnded) {
+      addToast({ message: 'No ended parties to generate a recap for', variant: 'info' });
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const recap = await recapRepo.generateRecapLocally(mostRecentEnded.id);
+      setRecaps((prev) => [recap, ...prev.filter((r) => r.partyId !== recap.partyId)]);
+      addToast({ message: 'Recap generated!', variant: 'success' });
+    } catch {
+      addToast({ message: 'Could not generate recap — try again', variant: 'error' });
+    } finally {
+      setGenerating(false);
+    }
   }
 
   if (recaps.length === 0) {
@@ -93,7 +136,19 @@ export function RecapTab() {
         animate="visible"
         className="p-4 space-y-4"
       >
-        <h2 className="text-2xl font-black text-text-primary px-1">Your Nights</h2>
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-2xl font-black text-text-primary">Your Nights</h2>
+          {pastParties.length > 0 && (
+            <Button
+              variant="ghost"
+              onClick={handleGenerateRecap}
+              disabled={generating}
+            >
+              <RefreshCw size={14} className={`mr-1.5 ${generating ? 'animate-spin' : ''}`} />
+              {generating ? 'Generating…' : 'Generate Recap'}
+            </Button>
+          )}
+        </div>
 
         {/* Camera roll sync banner */}
         {photosPermission === 'granted' ? (

@@ -42,14 +42,16 @@ function AnimatedNumber({ value }: { value: string }) {
   );
 }
 
-// Horizontal bar chart for drink-breakdown
-function DrinkBarChart() {
-  const categories = [
-    { label: 'Beer', pct: 0.35, color: '#FFD60A' },
-    { label: 'Cocktail', pct: 0.45, color: '#FF2D55' },
-    { label: 'Shot', pct: 0.12, color: '#00E5FF' },
-    { label: 'Wine', pct: 0.08, color: '#BF5AF2' },
-  ];
+// Horizontal bar chart — uses real data from slide when available
+function DrinkBarChart({ drinkData }: { drinkData?: RecapSlideType['drinkData'] }) {
+  const categories = drinkData && drinkData.length > 0
+    ? drinkData
+    : [
+        { label: 'Beer', pct: 0.35, color: '#FFD60A' },
+        { label: 'Cocktail', pct: 0.45, color: '#FF2D55' },
+        { label: 'Shot', pct: 0.12, color: '#00E5FF' },
+        { label: 'Wine', pct: 0.08, color: '#BF5AF2' },
+      ];
 
   return (
     <div className="w-full space-y-3 px-2">
@@ -106,8 +108,63 @@ function GlowClock({ subheading }: { subheading: string }) {
   );
 }
 
-// Group photo placeholder
-function GroupPhotoPlaceholder() {
+// Group photo — shows real member stats when available, falls back to placeholder
+function GroupPhotoDisplay({
+  memberStats,
+  mediaUrls,
+}: {
+  memberStats?: RecapSlideType['memberStats'];
+  mediaUrls?: string[];
+}) {
+  const firstPhoto = mediaUrls?.[0];
+
+  if (firstPhoto) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+        className="w-64 h-64 rounded-3xl overflow-hidden mx-auto"
+      >
+        <img
+          src={firstPhoto}
+          alt="Party photo"
+          className="w-full h-full object-cover"
+        />
+      </motion.div>
+    );
+  }
+
+  if (memberStats && memberStats.length > 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+        className="w-full space-y-2 px-2"
+      >
+        {memberStats.slice(0, 4).map((m, i) => (
+          <motion.div
+            key={m.userId}
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 28 }}
+            className="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/10"
+          >
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-black text-white"
+              style={{ background: 'rgba(255,255,255,0.2)' }}
+            >
+              {m.name.charAt(0).toUpperCase()}
+            </div>
+            <span className="text-white font-semibold flex-1">{m.name.split(' ')[0]}</span>
+            <span className="text-white/70 text-sm font-medium">{m.drinkCount} drinks</span>
+          </motion.div>
+        ))}
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -155,13 +212,20 @@ export function RecapSlide({ slide }: RecapSlideProps) {
         </motion.div>
       )}
 
-      {slide.variant === 'drink-breakdown' && <DrinkBarChart />}
+      {slide.variant === 'drink-breakdown' && (
+        <DrinkBarChart drinkData={slide.drinkData} />
+      )}
 
       {slide.variant === 'peak-moment' && (
         <GlowClock subheading={slide.subheading} />
       )}
 
-      {slide.variant === 'group-photo' && <GroupPhotoPlaceholder />}
+      {slide.variant === 'group-photo' && (
+        <GroupPhotoDisplay
+          memberStats={slide.memberStats}
+          mediaUrls={slide.mediaUrls}
+        />
+      )}
 
       {/* Subheading */}
       <motion.p

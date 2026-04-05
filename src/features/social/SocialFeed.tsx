@@ -30,11 +30,20 @@ function SkeletonCard() {
   );
 }
 
-function getUserForPost(userId: string) {
-  const user = MOCK_USERS.find((u) => u.id === userId);
+function resolveUserForPost(post: SocialPostType): { name: string; seed: string; avatarUrl?: string } {
+  // Use real profile data if available (from Supabase join)
+  if (post.userName) {
+    return {
+      name: post.userName,
+      seed: post.userName,
+      avatarUrl: post.userAvatar,
+    };
+  }
+  // Fall back to mock data
+  const user = MOCK_USERS.find((u) => u.id === post.userId);
   return {
     name: user?.name ?? 'Unknown',
-    seed: user?.name?.split(' ')[0] ?? userId,
+    seed: user?.name?.split(' ')[0] ?? post.userId,
   };
 }
 
@@ -66,10 +75,10 @@ export function SocialFeed({ posts, loading = false }: SocialFeedProps) {
       animate="visible"
     >
       {posts.map((post) => {
-        const { name, seed } = getUserForPost(post.userId);
+        const { name, seed, avatarUrl } = resolveUserForPost(post);
         return (
           <motion.div key={post.id} variants={staggerItem}>
-            <SocialPost post={post} userName={name} userSeed={seed} />
+            <SocialPost post={post} userName={name} userSeed={seed} userAvatarUrl={avatarUrl} />
           </motion.div>
         );
       })}

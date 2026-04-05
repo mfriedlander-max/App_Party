@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Sun, Moon, Settings } from 'lucide-react';
 import { useTheme } from '@/hooks/use-theme';
@@ -11,21 +11,30 @@ import { useAppStore } from '@/store/app-store';
 import { useDrinkStore } from '@/store/drink-store';
 import { usePartyStore } from '@/store/party-store';
 import { ALL_BADGES } from '@/data/mock-achievements';
+import { fetchAchievements } from '@/lib/repositories/gamification-repository';
 import { levelThreshold, xpToLevel } from '@/utils/xp-calculator';
 import { formatXP } from '@/utils/format';
 import { staggerContainer, staggerItem } from '@/design-system/animations';
 import type { Badge } from '@/types';
+import type { AchievementRow } from '@/lib/repositories/gamification-repository';
 
 interface BadgeGridProps {
   readonly earnedBadges: Badge[];
+  readonly allAchievements: AchievementRow[];
 }
 
-function BadgeGrid({ earnedBadges }: BadgeGridProps) {
+function BadgeGrid({ earnedBadges, allAchievements }: BadgeGridProps) {
   const earnedIds = new Set(earnedBadges.map((b) => b.id));
+
+  // Use real achievements from Supabase if available, fall back to mock data
+  const displayBadges: Array<{ id: string; name: string; description: string; emoji: string }> =
+    allAchievements.length > 0
+      ? allAchievements
+      : ALL_BADGES;
 
   return (
     <div className="grid grid-cols-4 gap-3">
-      {ALL_BADGES.map((badge) => {
+      {displayBadges.map((badge) => {
         const isEarned = earnedIds.has(badge.id);
         return (
           <motion.div
@@ -68,6 +77,15 @@ export function ProfileStats() {
   const pastParties = usePartyStore((s) => s.pastParties);
   const { theme, toggleTheme } = useTheme();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [allAchievements, setAllAchievements] = useState<AchievementRow[]>([]);
+
+  useEffect(() => {
+    fetchAchievements()
+      .then(setAllAchievements)
+      .catch(() => {
+        // Supabase unavailable — fall back to mock badge list
+      });
+  }, []);
 
   const level = xpToLevel(currentUser.xp);
   const currentThreshold = levelThreshold(level);
@@ -181,11 +199,11 @@ export function ProfileStats() {
           <h3 className="text-base font-bold text-text-primary mb-4">
             Badges{' '}
             <span className="text-text-muted font-normal text-sm">
-              {currentUser.badges.length}/{ALL_BADGES.length}
+              {currentUser.badges.length}/{allAchievements.length > 0 ? allAchievements.length : ALL_BADGES.length}
             </span>
           </h3>
           <motion.div variants={staggerContainer} initial="hidden" animate="visible">
-            <BadgeGrid earnedBadges={currentUser.badges} />
+            <BadgeGrid earnedBadges={currentUser.badges} allAchievements={allAchievements} />
           </motion.div>
         </Card>
       </motion.div>

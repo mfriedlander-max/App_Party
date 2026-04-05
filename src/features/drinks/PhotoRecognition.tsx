@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, X, Plus } from 'lucide-react';
 import { SheetModal } from '@/design-system/components/SheetModal';
@@ -8,9 +8,34 @@ import { useAppStore } from '@/store/app-store';
 import { useHaptic } from '@/hooks/use-haptic';
 import { usePermissions } from '@/hooks/use-permissions';
 import { xpForDrink } from '@/utils/xp-calculator';
-import type { DrinkCatalogItem } from '@/types';
+import { scanDrink } from '@/lib/services/scan-service';
+import { logCorrection } from '@/lib/repositories/corrections-repository';
+import { logDrink } from '@/lib/repositories/drink-repository';
+import type { ScanResult } from '@/lib/services/scan-service';
+
+const CURRENT_USER_ID = 'mock-user';
+
+const VESSEL_OPTIONS = [
+  'pint glass',
+  'wine glass',
+  'shot glass',
+  'solo cup',
+  'can',
+  'bottle',
+  'rocks glass',
+  'highball glass',
+  'martini glass',
+  'champagne flute',
+] as const;
 
 type ScanState = 'idle' | 'scanning' | 'identified' | 'error';
+
+interface EditableFields {
+  drinkType: string;
+  abv: number;
+  vesselType: string;
+  fillLevel: number;
+}
 
 interface PhotoRecognitionProps {
   readonly isOpen: boolean;
@@ -19,10 +44,12 @@ interface PhotoRecognitionProps {
 
 export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
   const [scanState, setScanState] = useState<ScanState>('idle');
-  const [identified, setIdentified] = useState<DrinkCatalogItem | null>(null);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [editable, setEditable] = useState<EditableFields | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const catalog = useDrinkStore((s) => s.catalog);
   const addDrink = useDrinkStore((s) => s.addDrink);
+  const catalog = useDrinkStore((s) => s.catalog);
   const currentUser = useAppStore((s) => s.currentUser);
   const addToast = useAppStore((s) => s.addToast);
   const awardXP = useAppStore((s) => s.awardXP);
@@ -44,47 +71,150 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
       }
     }
     haptic.medium();
+    fileInputRef.current?.click();
+  }, [cameraPermission, requestCamera, addToast, haptic]);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     setScanState('scanning');
 
-    setTimeout(() => {
-      // Simulate identification — pick a random drink
-      const randomIndex = Math.floor(Math.random() * catalog.length);
-      const drink = catalog[randomIndex];
-      if (drink) {
-        setIdentified(drink);
-        setScanState('identified');
-        haptic.light();
-      } else {
-        setScanState('error');
-      }
-    }, 2000);
-  }, [catalog, haptic, cameraPermission, requestCamera, addToast]);
+    try {
+      const base64 = await fileToBase64(file);
+      const result = await scanDrink(base64);
+      setScanResult(result);
+      setEditable({
+        drinkType: result.drinkType,
+        abv: parseFloat((result.abv * 100).toFixed(1)),
+        vesselType: result.vesselType,
+        fillLevel: Math.round(result.fillLevel * 100),
+      });
+      setScanState('identified');
+      haptic.light();
+    } catch {
+      addToast({ message: 'Could not scan drink. Try again or add manually.', variant: 'error' });
+      setScanState('error');
+    }
 
-  const handleAdd = useCallback(() => {
-    if (!identified) return;
+    // Reset input so the same file can be re-selected
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [addToast, haptic]);
+
+  const handleAdd = useCallback(async () => {
+    if (!scanResult || !editable) return;
     haptic.medium();
-    addDrink(identified.id);
+
+    const abvDecimal = editable.abv / 100;
+    const fillDecimal = editable.fillLevel / 100;
+
+    // Find a matching catalog item if possible
+    const catalogMatch = catalog.find(
+      (c) => c.name.toLowerCase() === editable.drinkType.toLowerCase(),
+    );
+
+    if (catalogMatch) {
+      addDrink(catalogMatch.id);
+    } else {
+      // Log directly via repository for non-catalog drinks
+      const alcoholMl = scanResult.volumeMl * fillDecimal * abvDecimal;
+      const alcoholGrams = alcoholMl * 0.789;
+      try {
+        const entry = await logDrink(CURRENT_USER_ID, {
+          catalogItemId: null,
+          drinkType: editable.drinkType,
+          alcoholGrams,
+          abv: abvDecimal,
+          volumeMl: scanResult.volumeMl,
+          vesselType: editable.vesselType,
+          fillLevel: fillDecimal,
+          isManualEntry: false,
+        });
+
+        // If user edited any field, save a correction
+        const userEdited =
+          editable.drinkType !== scanResult.drinkType ||
+          Math.abs(editable.abv - scanResult.abv * 100) > 0.01 ||
+          editable.vesselType !== scanResult.vesselType ||
+          Math.abs(editable.fillLevel - scanResult.fillLevel * 100) > 0.5;
+
+        if (userEdited) {
+          logCorrection(
+            entry.id,
+            {
+              drink_type: scanResult.drinkType,
+              abv: scanResult.abv,
+              vessel_type: scanResult.vesselType,
+              fill_level: scanResult.fillLevel,
+            },
+            {
+              drink_type: editable.drinkType,
+              abv: abvDecimal,
+              vessel_type: editable.vesselType,
+              fill_level: fillDecimal,
+            },
+          ).catch(() => {
+            // Correction logging is best-effort
+          });
+        }
+      } catch {
+        // Supabase unavailable — drink not persisted but UX continues
+      }
+    }
+
     const xp = xpForDrink(currentUser.streakWeekends);
     awardXP(xp);
-    addToast({ message: `+${xp} XP — ${identified.name} added!`, variant: 'success' });
+    addToast({ message: `+${xp} XP — ${editable.drinkType} added!`, variant: 'success' });
     onClose();
     setScanState('idle');
-    setIdentified(null);
-  }, [identified, haptic, addDrink, currentUser.streakWeekends, awardXP, addToast, onClose]);
+    setScanResult(null);
+    setEditable(null);
+  }, [
+    scanResult,
+    editable,
+    haptic,
+    catalog,
+    addDrink,
+    currentUser.streakWeekends,
+    awardXP,
+    addToast,
+    onClose,
+  ]);
 
   const handleManual = useCallback(() => {
     onClose();
     setScanState('idle');
-    setIdentified(null);
+    setScanResult(null);
+    setEditable(null);
   }, [onClose]);
 
   const handleReset = useCallback(() => {
     setScanState('idle');
-    setIdentified(null);
+    setScanResult(null);
+    setEditable(null);
+  }, []);
+
+  const updateEditable = useCallback(<K extends keyof EditableFields>(
+    field: K,
+    value: EditableFields[K],
+  ) => {
+    setEditable((prev) => prev ? { ...prev, [field]: value } : prev);
   }, []);
 
   return (
     <SheetModal isOpen={isOpen} onClose={onClose} title="Scan Your Drink">
+      {/* Hidden file input for camera/gallery capture */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       <div className="pb-6 flex flex-col items-center gap-6">
         <AnimatePresence mode="wait">
           {scanState === 'idle' && (
@@ -95,7 +225,6 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
               exit={{ opacity: 0 }}
               className="flex flex-col items-center gap-6 w-full"
             >
-              {/* Viewfinder placeholder */}
               <div className="w-full aspect-square max-w-[280px] bg-surface rounded-2xl border-2 border-dashed border-border flex items-center justify-center">
                 <Camera size={64} className="text-text-secondary" />
               </div>
@@ -117,7 +246,6 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
               exit={{ opacity: 0 }}
               className="flex flex-col items-center gap-6 w-full"
             >
-              {/* Pulsing glow border viewfinder */}
               <motion.div
                 className="w-full aspect-square max-w-[280px] bg-surface rounded-2xl flex items-center justify-center"
                 animate={{
@@ -142,24 +270,85 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
             </motion.div>
           )}
 
-          {scanState === 'identified' && identified && (
+          {scanState === 'identified' && editable && (
             <motion.div
               key="identified"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center gap-5 w-full"
+              className="flex flex-col gap-5 w-full"
             >
-              <span className="text-7xl leading-none">{identified.emoji}</span>
-              <div className="text-center">
-                <p className="text-text-primary text-2xl font-bold">{identified.name}</p>
-                <p className="text-text-secondary text-base mt-1">
-                  {identified.standardDrinks.toFixed(1)} std drinks · {identified.abv}% ABV
-                </p>
+              <p className="text-text-secondary text-sm text-center">
+                AI identified your drink. Edit any field before confirming.
+              </p>
+
+              {/* Drink name */}
+              <div className="flex flex-col gap-1">
+                <label className="text-text-secondary text-xs font-medium uppercase tracking-wide">
+                  Drink Name
+                </label>
+                <input
+                  type="text"
+                  value={editable.drinkType}
+                  onChange={(e) => updateEditable('drinkType', e.target.value)}
+                  className="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-text-primary text-base focus:outline-none focus:border-glow"
+                />
               </div>
+
+              {/* ABV */}
+              <div className="flex flex-col gap-1">
+                <label className="text-text-secondary text-xs font-medium uppercase tracking-wide">
+                  ABV %
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={editable.abv}
+                  onChange={(e) => updateEditable('abv', parseFloat(e.target.value) || 0)}
+                  className="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-text-primary text-base focus:outline-none focus:border-glow"
+                />
+              </div>
+
+              {/* Vessel type */}
+              <div className="flex flex-col gap-1">
+                <label className="text-text-secondary text-xs font-medium uppercase tracking-wide">
+                  Vessel Type
+                </label>
+                <select
+                  value={editable.vesselType}
+                  onChange={(e) => updateEditable('vesselType', e.target.value)}
+                  className="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-text-primary text-base focus:outline-none focus:border-glow appearance-none"
+                >
+                  {VESSEL_OPTIONS.map((v) => (
+                    <option key={v} value={v}>
+                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Fill level */}
+              <div className="flex flex-col gap-2">
+                <label className="text-text-secondary text-xs font-medium uppercase tracking-wide flex justify-between">
+                  <span>Fill Level</span>
+                  <span className="text-text-primary">{editable.fillLevel}%</span>
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={editable.fillLevel}
+                  onChange={(e) => updateEditable('fillLevel', parseInt(e.target.value, 10))}
+                  className="w-full accent-glow"
+                />
+              </div>
+
               <Button variant="primary" size="large" fullWidth onClick={handleAdd}>
                 <Plus size={20} className="mr-2" />
-                Add This Drink
+                Confirm Drink
               </Button>
               <Button variant="ghost" size="default" fullWidth onClick={handleReset}>
                 Try Again
@@ -194,4 +383,24 @@ export function PhotoRecognition({ isOpen, onClose }: PhotoRecognitionProps) {
       </div>
     </SheetModal>
   );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip the data URL prefix (data:image/jpeg;base64,...)
+      const base64 = result.split(',')[1];
+      if (!base64) {
+        reject(new Error('Failed to read file as base64'));
+        return;
+      }
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error('FileReader error'));
+    reader.readAsDataURL(file);
+  });
 }

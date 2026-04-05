@@ -1,3 +1,4 @@
+import { CheckCircle } from 'lucide-react';
 import { Avatar } from '@/design-system/components/Avatar';
 import { Badge } from '@/design-system/components/Badge';
 import type { User } from '@/types';
@@ -6,6 +7,7 @@ interface PartyMemberProps {
   readonly user: User;
   readonly drinkCount: number;
   readonly bac?: number;
+  readonly done?: boolean;
 }
 
 function getBacColor(bac: number): string {
@@ -20,7 +22,7 @@ function getBacLevel(bac: number): string {
   return 'safe';
 }
 
-export function PartyMember({ user, drinkCount, bac = 0 }: PartyMemberProps) {
+export function PartyMember({ user, drinkCount, bac = 0, done = false }: PartyMemberProps) {
   const bacColor = getBacColor(bac);
   const bacLevel = getBacLevel(bac);
 
@@ -49,7 +51,11 @@ export function PartyMember({ user, drinkCount, bac = 0 }: PartyMemberProps) {
       <p className="text-text-primary text-sm font-semibold text-center truncate w-full">
         {user.name.split(' ')[0]}
       </p>
-      <Badge type="count" count={drinkCount} variant="accent" />
+      {done ? (
+        <CheckCircle size={16} className="text-[#30D158]" />
+      ) : (
+        <Badge type="count" count={drinkCount} variant="accent" />
+      )}
     </div>
   );
 }

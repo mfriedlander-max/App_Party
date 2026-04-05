@@ -10,9 +10,10 @@ interface SocialPostProps {
   readonly post: SocialPostType;
   readonly userName: string;
   readonly userSeed: string;
+  readonly userAvatarUrl?: string;
 }
 
-export function SocialPost({ post, userName, userSeed }: SocialPostProps) {
+export function SocialPost({ post, userName, userSeed, userAvatarUrl }: SocialPostProps) {
   // Immutable like state — never mutate post prop
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likeCount);
@@ -33,7 +34,15 @@ export function SocialPost({ post, userName, userSeed }: SocialPostProps) {
       <article className="bg-surface-raised border-b border-border-subtle">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3">
-          <Avatar seed={userSeed} size="sm" />
+          {userAvatarUrl ? (
+            <img
+              src={userAvatarUrl}
+              alt={userName}
+              className="w-8 h-8 rounded-full object-cover border-2 border-border-subtle"
+            />
+          ) : (
+            <Avatar seed={userSeed} size="sm" />
+          )}
           <div className="flex-1 min-w-0">
             <p className="text-text-primary font-semibold text-base leading-tight truncate">
               {userName}
@@ -45,12 +54,10 @@ export function SocialPost({ post, userName, userSeed }: SocialPostProps) {
         </div>
 
         {/* Image */}
-        <div
-          className="w-full aspect-square bg-surface-elevated overflow-hidden"
-        >
+        <div className="w-full aspect-square bg-surface-elevated overflow-hidden">
           <img
             src={post.imageUrl}
-            alt={post.caption}
+            alt={post.caption || `Photo by ${userName}`}
             className="w-full h-full object-cover"
           />
         </div>
@@ -99,12 +106,14 @@ export function SocialPost({ post, userName, userSeed }: SocialPostProps) {
         </div>
 
         {/* Caption */}
-        <div className="px-4 pb-4">
-          <p className="text-text-primary text-base leading-snug">
-            <span className="font-bold">{userName}</span>{' '}
-            {post.caption}
-          </p>
-        </div>
+        {post.caption ? (
+          <div className="px-4 pb-4">
+            <p className="text-text-primary text-base leading-snug">
+              <span className="font-bold">{userName}</span>{' '}
+              {post.caption}
+            </p>
+          </div>
+        ) : null}
       </article>
 
       <ShareSheet isOpen={shareOpen} onClose={() => setShareOpen(false)} />

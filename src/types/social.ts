@@ -7,4 +7,8 @@ export interface SocialPost {
   commentCount: number;
   postedAt: string;
   partyId?: string;
+  /** Populated from Supabase profiles join */
+  userName?: string;
+  /** Supabase Storage URL for user avatar */
+  userAvatar?: string;
 }

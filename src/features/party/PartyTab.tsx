@@ -6,6 +6,7 @@ import { SheetModal } from '@/design-system/components/SheetModal';
 import { PartyLobby } from './PartyLobby';
 import { CreateParty } from './CreateParty';
 import { usePartyStore } from '@/store/party-store';
+import { useAppStore } from '@/store/app-store';
 import { fadeIn, springs } from '@/design-system/animations';
 
 type JoinState = 'idle' | 'entering';
@@ -13,6 +14,7 @@ type JoinState = 'idle' | 'entering';
 export function PartyTab() {
   const activeParty = usePartyStore((s) => s.activeParty);
   const joinParty = usePartyStore((s) => s.joinParty);
+  const addToast = useAppStore((s) => s.addToast);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
@@ -20,18 +22,24 @@ export function PartyTab() {
   const [joinState, setJoinState] = useState<JoinState>('idle');
   const [joinError, setJoinError] = useState('');
 
-  function handleJoin() {
+  async function handleJoin() {
     const code = joinCode.trim().toUpperCase();
     if (!code) {
       setJoinError('Enter an invite code');
       return;
     }
     setJoinState('entering');
-    joinParty(code);
-    setJoinOpen(false);
-    setJoinCode('');
-    setJoinState('idle');
-    setJoinError('');
+    try {
+      await joinParty(code);
+      setJoinOpen(false);
+      setJoinCode('');
+      setJoinError('');
+    } catch {
+      setJoinError('Party not found or no longer active');
+      addToast({ message: 'Could not find that party', variant: 'error' });
+    } finally {
+      setJoinState('idle');
+    }
   }
 
   return (
@@ -147,7 +155,7 @@ export function PartyTab() {
             disabled={joinState === 'entering'}
             fullWidth
           >
-            Join Party
+            {joinState === 'entering' ? 'Joining…' : 'Join Party'}
           </Button>
         </div>
       </SheetModal>

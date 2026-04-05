@@ -1,19 +1,52 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { SocialFeed } from './SocialFeed';
 import { usePartyStore } from '@/store/party-store';
+import { fetchSocialFeed } from '@/lib/repositories/social-repository';
+import { CURRENT_USER } from '@/data/mock-users';
+import type { SocialPost } from '@/types';
+import type { SocialFeedItem } from '@/lib/repositories/media-repository';
+
+function feedItemToPost(item: SocialFeedItem): SocialPost {
+  return {
+    id: item.id,
+    userId: item.user_id,
+    imageUrl: item.storage_url,
+    caption: '',
+    likeCount: 0,
+    commentCount: 0,
+    postedAt: item.captured_at,
+    partyId: item.party_id ?? undefined,
+    userName: item.user_name,
+    userAvatar: item.user_avatar ?? undefined,
+  };
+}
 
 export function SocialTab() {
-  const socialFeed = usePartyStore((s) => s.socialFeed);
+  const mockFeed = usePartyStore((s) => s.socialFeed);
+  const [posts, setPosts] = useState<SocialPost[]>(mockFeed);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  function handleRefresh() {
+  const loadFeed = useCallback(async () => {
     setLoading(true);
-    // Mock refresh — reset scroll and clear loading after a short delay
-    setTimeout(() => {
+    try {
+      const items = await fetchSocialFeed(CURRENT_USER.id);
+      setPosts(items.length > 0 ? items.map(feedItemToPost) : mockFeed);
+    } catch {
+      // Supabase unavailable — fall back to mock data
+      setPosts(mockFeed);
+    } finally {
       setLoading(false);
-    }, 800);
+    }
+  }, [mockFeed]);
+
+  useEffect(() => {
+    loadFeed().catch(() => {});
+  }, [loadFeed]);
+
+  function handleRefresh() {
+    loadFeed().catch(() => {});
   }
 
   return (
@@ -45,7 +78,7 @@ export function SocialTab() {
         </button>
       </div>
 
-      <SocialFeed posts={socialFeed} loading={loading} />
+      <SocialFeed posts={posts} loading={loading} />
     </div>
   );
 }

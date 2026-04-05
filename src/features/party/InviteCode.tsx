@@ -9,8 +9,13 @@ interface InviteCodeProps {
   readonly code: string;
 }
 
+function buildInviteUrl(code: string): string {
+  return `${window.location.origin}/invite/${code}`;
+}
+
 export function InviteCode({ isOpen, onClose, code }: InviteCodeProps) {
   const addToast = useAppStore((s) => s.addToast);
+  const inviteUrl = buildInviteUrl(code);
 
   function handleCopy() {
     navigator.clipboard.writeText(code).then(() => {
@@ -20,8 +25,26 @@ export function InviteCode({ isOpen, onClose, code }: InviteCodeProps) {
     });
   }
 
+  function handleCopyLink() {
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      addToast({ message: 'Invite link copied!', variant: 'success' });
+    }).catch(() => {
+      addToast({ message: 'Failed to copy link', variant: 'error' });
+    });
+  }
+
   function handleShare() {
-    addToast({ message: 'Share feature coming soon!', variant: 'info' });
+    if (typeof navigator.share === 'function') {
+      navigator.share({
+        title: 'Join my party on App Party!',
+        text: `Use code ${code} or tap the link to join`,
+        url: inviteUrl,
+      }).catch(() => {
+        // User dismissed share sheet — not an error
+      });
+    } else {
+      handleCopyLink();
+    }
   }
 
   return (
@@ -44,8 +67,16 @@ export function InviteCode({ isOpen, onClose, code }: InviteCodeProps) {
           </span>
         </div>
 
+        {/* Invite URL */}
+        <div
+          className="w-full px-4 py-3 rounded-xl text-text-muted text-sm font-mono truncate text-center select-all"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1E1E28' }}
+        >
+          {inviteUrl}
+        </div>
+
         <p className="text-text-secondary text-center text-base">
-          Share this code with friends to invite them to your party
+          Share this code or link with friends to invite them to your party
         </p>
 
         {/* Actions */}
@@ -56,7 +87,7 @@ export function InviteCode({ isOpen, onClose, code }: InviteCodeProps) {
           </Button>
           <Button variant="secondary" onClick={handleShare} fullWidth>
             <Share2 size={18} className="mr-2" />
-            Share
+            Share Link
           </Button>
         </div>
       </div>

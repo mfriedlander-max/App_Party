@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /Users/maxfriedlander/code/apps/App_Party && git log --oneline -3 2>&1\",\"description\":\"Check git history\"}",
-  "error": "Exit code 128\nfatal: not a git repository (or any of the parent directories): .git",
-  "timestamp": "2026-04-04T20:10:24.107Z",
+  "tool_input_preview": "{\"command\":\"cd /Users/maxfriedlander/code/apps/App_Party && supabase db execute --file supabase/seed/seed-drinks.sql 2>&1\",\"timeout\":15000,\"description\":\"Seed drink catalog\"}",
+  "error": "Exit code 1\nUsage:\n  supabase db [command]\n\nAvailable Commands:\n  advisors    Checks database for security and performance issues\n  diff        Diffs the local database for schema changes\n  dump        Dumps data or schemas from the remote database\n  lint        Checks local database for typing error\n  pull        Pull schema from the remote database\n  push        Push new migrations to the remote database\n  query       Execute a SQL query against the database\n  reset       Resets the local data...",
+  "timestamp": "2026-04-04T23:59:16.182Z",
   "retry_count": 1
 }

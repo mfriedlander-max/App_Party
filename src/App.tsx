@@ -9,6 +9,8 @@ import { pageTransition, fadeIn } from './design-system/animations';
 import { SafetyMonitor } from './features/safety/SafetyMonitor';
 import { SafetyAlertOverlay } from './features/safety/SafetyAlert';
 import { SafetyDashboard } from './features/safety/SafetyDashboard';
+import { AuthGate } from './features/auth/AuthGate';
+import { InviteJoinPage } from './features/party/InviteJoinPage';
 
 // Lazy-loaded feature tabs — keeps initial bundle small
 const DrinksTab = lazy(() =>
@@ -60,7 +62,17 @@ export default function App() {
   const pageTitle = routeTitles[location.pathname] ?? 'App Party';
   const [safetyOpen, setSafetyOpen] = useState(false);
 
+  // Invite route renders outside the phone chrome
+  if (location.pathname.startsWith('/invite/')) {
+    return (
+      <AuthGate>
+        <InviteJoinPage />
+      </AuthGate>
+    );
+  }
+
   return (
+    <AuthGate>
     <div className="phone-frame-wrapper">
       <div className="phone-frame">
         <div className="phone-notch" />
@@ -118,5 +130,6 @@ export default function App() {
         </div>
       </div>
     </div>
+    </AuthGate>
   );
 }
